@@ -10,7 +10,8 @@
 <body>
     <div class="container">
         <header>
-            <h1>🛒 Kalimata Grocery</h1>
+            <img src="Kalimata_Logo.png" alt="Kali Mata Enterprises Logo" class="logo-img" />
+            <h1>🛒 Kali Mata Enterprises</h1>
             <p>Fresh Products, Great Prices!</p>
         </header>
 
@@ -23,8 +24,9 @@
                     <div class="header-item">Quantity</div>
                     <div class="header-item">Unit</div>
                     <div class="header-item">Rate</div>
-                    <div class="header-item">Discount</div>
                     <div class="header-item">Price</div>
+                    <div class="header-item">Discount</div>
+                    <div class="header-item">Discounted / Final Price</div>
                     <div class="header-item">Action</div>
                 </div>
 
@@ -40,6 +42,22 @@
                     <div class="total-row">
                         <span class="total-label">Total Amount:</span>
                         <span id="total-amount" class="total-value">₹0.00</span>
+                    </div>
+                    <div class="final-discount-section">
+                        <label class="final-discount-label" for="final-discount-input">Final Discount (%)</label>
+                        <input type="number" id="final-discount-input" class="final-discount-input" min="0" max="100" step="0.01" value="0">
+                    </div>
+                    <div class="discounted-total-section">
+                        <label class="discounted-total-label">Discounted Total Amount:</label>
+                        <span id="discounted-total-value" class="discounted-total-value">₹0.00</span>
+                    </div>
+                    <div class="gst-section">
+                        <label class="gst-label" for="gst-input">GST (%)</label>
+                        <input type="number" id="gst-input" class="gst-input" min="0" max="100" step="0.01" value="0">
+                    </div>
+                    <div class="final-amount-row">
+                        <span>Final Amount to be Paid: </span>
+                        <span id="final-amount-value">₹0.00</span>
                     </div>
                 </div>
 
@@ -66,6 +84,7 @@
             </div>
             <div class="modal-footer">
                 <button id="generate-bill-btn" class="generate-bill-btn">📄 Generate Bill</button>
+                <button id="generate-mart-bill-btn" class="generate-bill-btn">🧾 Mart Bill</button>
                 <button id="close-modal-btn" class="close-modal-btn">Close</button>
             </div>
         </div>

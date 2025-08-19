@@ -132,6 +132,12 @@ class ShoppingCart {
         document.getElementById('generate-bill-btn').addEventListener('click', () => {
             this.generateBill();
         });
+        document.getElementById('generate-mart-bill-btn').addEventListener('click', () => {
+            this.generateMartBill();
+        });
+        document.getElementById('close-modal-btn').addEventListener('click', () => {
+            this.closeModal();
+        });
 
         document.getElementById('close-modal-btn').addEventListener('click', () => {
             this.closeModal();
@@ -147,6 +153,11 @@ class ShoppingCart {
             if (event.target === modal) {
                 this.closeModal();
             }
+        });
+
+        // Listen for changes to Final Discount input
+        document.getElementById('final-discount-input').addEventListener('input', () => {
+            this.updateTotal();
         });
     }
 
@@ -172,6 +183,20 @@ class ShoppingCart {
         cartItemElement.className = 'cart-item';
         cartItemElement.dataset.itemId = cartItem.id;
 
+        // Set default rateUnit based on unit
+        let defaultRateUnit = cartItem.rateUnit;
+        if (!defaultRateUnit) {
+            if (cartItem.unit === 'L' || cartItem.unit === 'cc') {
+                defaultRateUnit = 'L';
+            } else {
+                defaultRateUnit = 'kg';
+            }
+            cartItem.rateUnit = defaultRateUnit;
+        }
+        // Determine which Rate options should be disabled
+        let rateKgDisabled = (cartItem.unit === 'L' || cartItem.unit === 'cc') ? 'disabled' : '';
+        let rateLDisabled = (cartItem.unit === 'kg' || cartItem.unit === 'gm') ? 'disabled' : '';
+
         cartItemElement.innerHTML = `
             <select class="product-select" data-item-id="${cartItem.id}">
                 <option value="">Select a product...</option>
@@ -185,109 +210,185 @@ class ShoppingCart {
             <select class="unit-select" data-item-id="${cartItem.id}">
                 <option value="kg" ${cartItem.unit === 'kg' ? 'selected' : ''}>Kg</option>
                 <option value="gm" ${cartItem.unit === 'gm' ? 'selected' : ''}>gm</option>
-                <option value="L" ${cartItem.unit === 'L' ? 'selected' : ''}>L</option>
-                <option value="cc" ${cartItem.unit === 'cc' ? 'selected' : ''}>cc</option>
+                <option value="Pc" ${cartItem.unit === 'Pc' ? 'selected' : ''}>Pc</option>
+                <option value="Carton" ${cartItem.unit === 'Carton' ? 'selected' : ''}>Carton</option>
             </select>
-            <div class="price-display">
-                <span class="rate-value">₹0.00</span>
+            <div class="rate-group">
+                <input type="number" class="rate-input" min="0.01" step="0.01" value="${cartItem.rate || ''}" placeholder="Rate" data-item-id="${cartItem.id}">
+                <select class="rate-unit-select" data-item-id="${cartItem.id}">
+                    <option value="kg" ${defaultRateUnit === 'kg' ? 'selected' : ''} ${rateKgDisabled}>Rate (Kg)</option>
+                </select>
             </div>
-            <div class="discount-display">
-                <span class="discount-value">0%</span>
-            </div>
             <div class="price-display">
-                <span class="item-total">₹0.00</span>
+                <span class="price-value">₹0.00</span>
+            </div>
+            <input type="number" class="discount-input" min="0" max="100" step="0.01" value="${cartItem.discount || 0}" placeholder="Discount %" data-item-id="${cartItem.id}">
+            <div class="final-price-display">
+                <span class="final-price-value">₹0.00</span>
             </div>
             <button class="remove-btn" data-item-id="${cartItem.id}">×</button>
         `;
 
         cartItemsContainer.appendChild(cartItemElement);
-
-        // Add event listeners for this cart item
         this.setupCartItemEventListeners(cartItem.id);
     }
 
     setupCartItemEventListeners(itemId) {
         const productSelect = document.querySelector(`select.product-select[data-item-id="${itemId}"]`);
-        const quantityInput = document.querySelector(`input[data-item-id="${itemId}"]`);
+        const quantityInput = document.querySelector(`input.quantity-input[data-item-id="${itemId}"]`);
         const unitSelect = document.querySelector(`select.unit-select[data-item-id="${itemId}"]`);
+        const rateInput = document.querySelector(`input.rate-input[data-item-id="${itemId}"]`);
+        const rateUnitSelect = document.querySelector(`select.rate-unit-select[data-item-id="${itemId}"]`);
+        const discountInput = document.querySelector(`input.discount-input[data-item-id="${itemId}"]`);
         const removeBtn = document.querySelector(`button[data-item-id="${itemId}"]`);
 
         productSelect.addEventListener('change', (e) => {
             this.updateCartItem(itemId, 'product', parseInt(e.target.value));
         });
-
         quantityInput.addEventListener('input', (e) => {
             this.updateCartItem(itemId, 'quantity', parseFloat(e.target.value) || 0.1);
         });
-
         unitSelect.addEventListener('change', (e) => {
             this.updateCartItem(itemId, 'unit', e.target.value);
+            // Dynamically update Rate dropdown disabling
+            const rateUnitSelect = document.querySelector(`select.rate-unit-select[data-item-id="${itemId}"]`);
+            if (e.target.value === 'L' || e.target.value === 'cc') {
+                rateUnitSelect.querySelector('option[value="kg"]').disabled = true;
+                rateUnitSelect.querySelector('option[value="L"]').disabled = false;
+            } else if (e.target.value === 'kg' || e.target.value === 'gm') {
+                rateUnitSelect.querySelector('option[value="kg"]').disabled = false;
+                rateUnitSelect.querySelector('option[value="L"]').disabled = true;
+            } else {
+                rateUnitSelect.querySelector('option[value="kg"]').disabled = false;
+                rateUnitSelect.querySelector('option[value="L"]').disabled = false;
+            }
         });
-
+        rateInput.addEventListener('input', (e) => {
+            this.updateCartItem(itemId, 'rate', parseFloat(e.target.value) || 0);
+        });
+        rateUnitSelect.addEventListener('change', (e) => {
+            this.handleRateUnitChange(itemId, e.target.value);
+        });
+        discountInput.addEventListener('input', (e) => {
+            this.updateCartItem(itemId, 'discount', parseFloat(e.target.value) || 0);
+        });
         removeBtn.addEventListener('click', () => {
             this.removeCartItem(itemId);
         });
+        // Initial disabling on render
+        if (unitSelect.value === 'L' || unitSelect.value === 'cc') {
+            rateUnitSelect.querySelector('option[value="kg"]').disabled = true;
+            rateUnitSelect.querySelector('option[value="L"]').disabled = false;
+        } else if (unitSelect.value === 'kg' || unitSelect.value === 'gm') {
+            rateUnitSelect.querySelector('option[value="kg"]').disabled = false;
+            rateUnitSelect.querySelector('option[value="L"]').disabled = true;
+        } else {
+            rateUnitSelect.querySelector('option[value="kg"]').disabled = false;
+            rateUnitSelect.querySelector('option[value="L"]').disabled = false;
+        }
+    }
+
+    handleRateUnitChange(itemId, newUnit) {
+        const cartItem = this.cartItems.find(item => item.id === itemId);
+        if (!cartItem) return;
+        // Conversion logic
+        let rate = cartItem.rate || 0;
+        let oldUnit = cartItem.rateUnit || 'kg';
+        if ((oldUnit === 'kg' && newUnit === 'gm') || (oldUnit === 'L' && newUnit === 'cc')) {
+            rate = rate / 1000;
+        } else if ((oldUnit === 'gm' && newUnit === 'kg') || (oldUnit === 'cc' && newUnit === 'L')) {
+            rate = rate * 1000;
+        }
+        cartItem.rateUnit = newUnit;
+        cartItem.rate = rate;
+        this.updateCartItemDisplay(itemId);
+        this.updateTotal();
+        // Update input value in DOM
+        const rateInput = document.querySelector(`input.rate-input[data-item-id="${itemId}"]`);
+        if (rateInput) rateInput.value = rate;
     }
 
     updateCartItem(itemId, field, value) {
         const cartItem = this.cartItems.find(item => item.id === itemId);
         if (!cartItem) return;
-
         if (field === 'product') {
             cartItem.productId = value;
         } else if (field === 'quantity') {
             cartItem.quantity = Math.max(0.1, value);
         } else if (field === 'unit') {
             cartItem.unit = value;
+        } else if (field === 'rate') {
+            cartItem.rate = Math.max(0, value);
+        } else if (field === 'discount') {
+            cartItem.discount = Math.max(0, value);
         }
-
+        if (!cartItem.rateUnit) cartItem.rateUnit = 'kg';
         this.updateCartItemDisplay(itemId);
         this.updateTotal();
     }
 
     updateCartItemDisplay(itemId) {
         const cartItem = this.cartItems.find(item => item.id === itemId);
-        const product = this.products.find(p => p.serialNumber === cartItem.productId);
-        
-        if (!product) return;
-
         const cartItemElement = document.querySelector(`[data-item-id="${itemId}"]`);
-        const rateElement = cartItemElement.querySelector('.rate-value');
-        const discountElement = cartItemElement.querySelector('.discount-value');
-        const itemTotalElement = cartItemElement.querySelector('.item-total');
-
-        // Calculate rate based on unit
-        const baseRate = product.pricePerUnit;
-        let adjustedRate = baseRate;
-        
-        if (cartItem.unit === 'gm' || cartItem.unit === 'cc') {
-            adjustedRate = baseRate / 1000;
+        const priceElement = cartItemElement.querySelector('.price-value');
+        const finalPriceElement = cartItemElement.querySelector('.final-price-value');
+        let rate = cartItem.rate || 0;
+        let rateUnit = cartItem.rateUnit || 'kg';
+        let itemUnit = cartItem.unit || 'kg';
+        let price = 0;
+        // Price calculation based on unit
+        if (itemUnit === 'kg') {
+            price = rate * (parseFloat(cartItem.quantity) || 0);
+        } else if (itemUnit === 'gm') {
+            price = (rate * (parseFloat(cartItem.quantity) || 0)) / 1000;
+        } else {
+            price = rate * (parseFloat(cartItem.quantity) || 0);
         }
-
-        // Update rate display
-        rateElement.textContent = `₹${adjustedRate.toFixed(2)}`;
-        
-        // Update discount display
-        discountElement.textContent = `${product.discount}%`;
-
-        // Calculate item total with discount
-        const itemTotal = this.calculateItemTotal(cartItem, product);
-        itemTotalElement.textContent = `₹${itemTotal.toFixed(2)}`;
+        // Set up price input for Pc/Carton, else display calculated price
+        let priceInputHtml = '';
+        if (itemUnit === 'Pc' || itemUnit === 'Carton') {
+            priceInputHtml = `<input type="number" class="price-input" min="0" step="0.01" value="${cartItem.price || ''}" placeholder="Enter Price" data-item-id="${cartItem.id}">`;
+            priceElement.innerHTML = priceInputHtml;
+            // Listen for price input changes
+            const priceInput = cartItemElement.querySelector('.price-input');
+            priceInput.addEventListener('input', (e) => {
+                cartItem.price = parseFloat(e.target.value) || 0;
+                this.updateTotal();
+            });
+        } else {
+            priceElement.textContent = `₹${price.toFixed(2)}`;
+            cartItem.price = price;
+        }
+        // Calculate final price using unified logic for all units
+        const discount = cartItem.discount || 0;
+        let finalPrice;
+        if (itemUnit === 'Pc' || itemUnit === 'Carton') {
+            finalPrice = cartItem.price * (100 - discount) / 100;
+            // Show Discounted Price even if discount is 0 and price is entered
+            if (!cartItem.discount && cartItem.price) {
+                finalPriceElement.textContent = `₹${cartItem.price.toFixed(2)}`;
+            } else {
+                finalPriceElement.textContent = `₹${finalPrice.toFixed(2)}`;
+            }
+        } else {
+            finalPrice = cartItem.price * (100 - discount) / 100;
+            finalPriceElement.textContent = `₹${finalPrice.toFixed(2)}`;
+        }
     }
 
-    calculateItemTotal(cartItem, product) {
+    calculateFinalPrice(cartItem, product) {
         // Calculate rate based on unit
-        let adjustedRate = product.pricePerUnit;
+        let adjustedRate = cartItem.rate;
         
         if (cartItem.unit === 'gm' || cartItem.unit === 'cc') {
-            adjustedRate = product.pricePerUnit / 1000;
+            adjustedRate = cartItem.rate / 1000;
         }
 
         // Calculate base price using floating point quantity
         const basePrice = adjustedRate * parseFloat(cartItem.quantity);
         
         // Apply discount
-        const discountAmount = (basePrice * product.discount) / 100;
+        const discountAmount = (basePrice * cartItem.discount) / 100;
         
         return basePrice - discountAmount;
     }
@@ -312,17 +413,47 @@ class ShoppingCart {
 
     updateTotal() {
         let total = 0;
-
         this.cartItems.forEach(cartItem => {
-            if (cartItem.productId) {
-                const product = this.products.find(p => p.serialNumber === cartItem.productId);
-                if (product) {
-                    total += this.calculateItemTotal(cartItem, product);
-                }
+            let itemUnit = cartItem.unit || 'kg';
+            let discountedPrice = 0;
+            if (itemUnit === 'Pc' || itemUnit === 'Carton') {
+                discountedPrice = (cartItem.price || 0) * (100 - (cartItem.discount || 0)) / 100;
+            } else if (itemUnit === 'kg') {
+                discountedPrice = (cartItem.rate || 0) * (parseFloat(cartItem.quantity) || 0) * (100 - (cartItem.discount || 0)) / 100;
+            } else if (itemUnit === 'gm') {
+                discountedPrice = ((cartItem.rate || 0) * (parseFloat(cartItem.quantity) || 0) / 1000) * (100 - (cartItem.discount || 0)) / 100;
             }
+            total += discountedPrice;
         });
-
+        // Always calculate Discounted Total and Final Amount directly
         document.getElementById('total-amount').textContent = `₹${total.toFixed(2)}`;
+        const finalDiscountInput = document.getElementById('final-discount-input');
+        const gstInput = document.getElementById('gst-input');
+        const discountedTotalValue = document.getElementById('discounted-total-value');
+        const finalAmountValue = document.getElementById('final-amount-value');
+        let finalDiscount = parseFloat(finalDiscountInput.value) || 0;
+        let gst = parseFloat(gstInput.value) || 0;
+        let discountedTotal = total * (100 - finalDiscount) / 100;
+        discountedTotalValue.textContent = `₹${discountedTotal.toFixed(2)}`;
+        let finalAmount = discountedTotal * (100 + gst) / 100;
+        finalAmountValue.textContent = `₹${finalAmount.toFixed(2)}`;
+        // Update value instantly on input change
+        finalDiscountInput.addEventListener('input', () => {
+            let finalDiscount = parseFloat(finalDiscountInput.value) || 0;
+            let gst = parseFloat(gstInput.value) || 0;
+            let discountedTotal = total * (100 - finalDiscount) / 100;
+            discountedTotalValue.textContent = `₹${discountedTotal.toFixed(2)}`;
+            let finalAmount = discountedTotal * (100 + gst) / 100;
+            finalAmountValue.textContent = `₹${finalAmount.toFixed(2)}`;
+        });
+        gstInput.addEventListener('input', () => {
+            let finalDiscount = parseFloat(finalDiscountInput.value) || 0;
+            let gst = parseFloat(gstInput.value) || 0;
+            let discountedTotal = total * (100 - finalDiscount) / 100;
+            discountedTotalValue.textContent = `₹${discountedTotal.toFixed(2)}`;
+            let finalAmount = discountedTotal * (100 + gst) / 100;
+            finalAmountValue.textContent = `₹${finalAmount.toFixed(2)}`;
+        });
     }
 
     checkout() {
@@ -345,38 +476,31 @@ class ShoppingCart {
         let summaryHTML = '';
 
         validItems.forEach(cartItem => {
-            const product = this.products.find(p => p.serialNumber === cartItem.productId);
-            if (product) {
-                const itemTotal = this.calculateItemTotal(cartItem, product);
-                total += itemTotal;
-                
-                // Calculate rate for display
-                let adjustedRate = product.pricePerUnit;
-                if (cartItem.unit === 'gm' || cartItem.unit === 'cc') {
-                    adjustedRate = product.pricePerUnit / 1000;
-                }
-                
-                summaryHTML += `
-                    <div class="checkout-item">
-                        <div class="item-details">
-                            <div class="item-name">${product.name}</div>
-                            <div class="item-specs">
-                                ${cartItem.quantity} ${cartItem.unit} @ ₹${adjustedRate.toFixed(2)}/${cartItem.unit}
-                                ${product.discount > 0 ? ` (${product.discount}% discount)` : ''}
-                            </div>
-                        </div>
-                        <div class="item-price">₹${itemTotal.toFixed(2)}</div>
-                    </div>
-                `;
+            let rate = cartItem.rate || 0;
+            if (cartItem.unit === 'gm' || cartItem.unit === 'cc') {
+                rate = rate / 1000;
             }
+            const price = rate * (parseFloat(cartItem.quantity) || 0);
+            const discount = cartItem.discount || 0;
+            const finalPrice = price * (1 - discount / 100);
+            total += finalPrice;
+            summaryHTML += `
+                <div class="checkout-item">
+                    <div class="item-details">
+                        <div class="item-name">${cartItem.productId ? this.products.find(p => p.serialNumber === cartItem.productId).name : ''}</div>
+                        <div class="item-specs">
+                            ${cartItem.quantity} ${cartItem.unit} @ ₹${rate.toFixed(2)}/${cartItem.unit}
+                            ${discount > 0 ? ` (${discount}% discount)` : ''}
+                        </div>
+                    </div>
+                    <div class="item-price">₹${finalPrice.toFixed(2)}</div>
+                </div>
+            `;
         });
 
         summaryContainer.innerHTML = summaryHTML;
         modalTotal.textContent = `₹${total.toFixed(2)}`;
-        
-        // Store current checkout data for bill generation
         this.currentCheckout = { validItems, total };
-        
         modal.style.display = 'block';
     }
 
@@ -390,112 +514,267 @@ class ShoppingCart {
             alert('No checkout data available.');
             return;
         }
-
-        this.createPDFBill(this.currentCheckout.validItems, this.currentCheckout.total);
+        // Recalculate total and final amount for PDF using same logic as updateTotal
+        let total = 0;
+        this.currentCheckout.validItems.forEach(cartItem => {
+            let itemUnit = cartItem.unit || 'kg';
+            let discountedPrice = 0;
+            if (itemUnit === 'Pc' || itemUnit === 'Carton') {
+                discountedPrice = (cartItem.price || 0) * (100 - (cartItem.discount || 0)) / 100;
+            } else if (itemUnit === 'kg') {
+                discountedPrice = (cartItem.rate || 0) * (parseFloat(cartItem.quantity) || 0) * (100 - (cartItem.discount || 0)) / 100;
+            } else if (itemUnit === 'gm') {
+                discountedPrice = ((cartItem.rate || 0) * (parseFloat(cartItem.quantity) || 0) / 1000) * (100 - (cartItem.discount || 0)) / 100;
+            }
+            total += discountedPrice;
+        });
+        const finalDiscountInput = document.getElementById('final-discount-input');
+        const gstInput = document.getElementById('gst-input');
+        let finalDiscount = parseFloat(finalDiscountInput.value) || 0;
+        let gst = parseFloat(gstInput.value) || 0;
+        let discountedTotal = total * (100 - finalDiscount) / 100;
+        let finalAmount = discountedTotal * (100 + gst) / 100;
+        this.createPDFBill(this.currentCheckout.validItems, total, finalDiscount, gst, discountedTotal, finalAmount);
     }
 
-    createPDFBill(validItems, total) {
+    createPDFBill(validItems, total, finalDiscount, gst, discountedTotal, finalAmount) {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-
-        // Bill header
-        doc.setFontSize(24);
+        // Bill header with logo
+        if (typeof window.KalimataLogoBase64 === 'string') {
+            doc.addImage(window.KalimataLogoBase64, 'PNG', 85, 5, 40, 20, undefined, 'FAST');
+        }
+        doc.setFont('times', 'bold');
+        doc.setFontSize(28);
         doc.setTextColor(76, 175, 80);
-        doc.text('KALIMATA GROCERY', 105, 25, { align: 'center' });
-        
+        doc.text('KALI MATA ENTERPRISES', 105, 25, { align: 'center' });
+        doc.setFont('times', 'italic');
+        doc.setFontSize(14);
+        doc.setTextColor(255, 87, 34);
+        doc.text('_____________________________', 105, 30, { align: 'center' });
+        doc.text('Fresh Products, Great Prices!', 105, 35, { align: 'center' });
+        doc.setFont('times', 'normal');
         doc.setFontSize(12);
         doc.setTextColor(0, 0, 0);
-        doc.text('Fresh Products, Great Prices!', 105, 35, { align: 'center' });
-        doc.text('Amra Kajan, Bisharpara- Nabajiban, North 24 Parganas - 700051', 105, 42, { align: 'center' });
-        doc.text('Phone: +91 98765 43210 | Email: info@kalimatagrocery.com', 105, 49, { align: 'center' });
-
-        // Horizontal line
-        doc.line(20, 55, 190, 55);
-
-        // Bill details
+        doc.text('Ground Floor, 493 Nabajiban Colony (Near Shiv Mandir),', 105, 42, { align: 'center' });
+        doc.text('Nabajiban School Road, Kolkata, North 24 Pgns, WB-700158', 105, 49, { align: 'center' });
+        doc.text('Phone: +91 93303 53449 | Email: info@kalimatagrocery.com', 105, 56, { align: 'center' });
+        doc.line(20, 61, 190, 61);
         const currentDate = new Date();
         const billNumber = 'KG' + Date.now().toString().slice(-6);
-        
+        // Bill No, Date, Time in one line
+        doc.setFont('times', 'normal');
         doc.setFontSize(10);
-        doc.text('Bill No: ' + billNumber, 20, 65);
-        doc.text('Date: ' + currentDate.toLocaleDateString(), 20, 72);
-        doc.text('Time: ' + currentDate.toLocaleTimeString(), 20, 79);
-
-        // Table header with proper alignment
-        doc.setFontSize(10);
-        doc.setFont(undefined, 'bold');
-        
-        const tableStartY = 90;
-        doc.text('S.No', 22, tableStartY);
-        doc.text('Product Name', 37, tableStartY);
-        doc.text('Qty', 107, tableStartY);
-        doc.text('Unit', 122, tableStartY);
-        doc.text('Rate', 137, tableStartY);
-        doc.text('Discount', 157, tableStartY);
-        doc.text('Amount', 177, tableStartY);
-
-        // Table line
+        doc.text(`Bill No: ${billNumber}    Date: ${currentDate.toLocaleDateString()}    Time: ${currentDate.toLocaleTimeString()}`,
+            20, 68);
+        doc.setFont('times', 'bold');
+        const tableStartY = 80;
+        // Adjusted X positions for better spacing
+        const xPositions = {
+            sno: 22,
+            product: 38,
+            qty: 60,
+            unit: 75,
+            rate: 90,
+            price: 125, // further increased gap after Rate
+            discount: 145,
+            final: 165
+        };
+        doc.text('S.No', xPositions.sno, tableStartY);
+        doc.text('Product', xPositions.product, tableStartY);
+        doc.text('Qty', xPositions.qty, tableStartY);
+        doc.text('Unit', xPositions.unit, tableStartY);
+        doc.text('Rate', xPositions.rate, tableStartY);
+        doc.text('Price', xPositions.price, tableStartY);
+        doc.text('Discount', xPositions.discount, tableStartY);
+        doc.text('Final Price', xPositions.final, tableStartY);
         doc.line(20, tableStartY + 3, 190, tableStartY + 3);
-
-        // Table content with proper alignment
-        doc.setFont(undefined, 'normal');
+        doc.setFont('times', 'normal');
         let yPosition = tableStartY + 12;
-        
         validItems.forEach((cartItem, index) => {
-            const product = this.products.find(p => p.serialNumber === cartItem.productId);
-            if (product) {
-                const itemTotal = this.calculateItemTotal(cartItem, product);
-                
-                // Calculate rate for display
-                let adjustedRate = product.pricePerUnit;
-                if (cartItem.unit === 'gm' || cartItem.unit === 'cc') {
-                    adjustedRate = product.pricePerUnit / 1000;
-                }
-
-                // Truncate product name if too long
-                const productName = product.name.length > 25 ? 
-                    product.name.substring(0, 22) + '...' : product.name;
-
-                // Align values with headers
-                doc.text((index + 1).toString(), 22, yPosition);
-                doc.text(productName, 37, yPosition);
-                doc.text(cartItem.quantity.toString(), 107, yPosition);
-                doc.text(cartItem.unit, 122, yPosition);
-                doc.text('Rs' + adjustedRate.toFixed(2), 137, yPosition);
-                doc.text(product.discount.toString() + '%', 157, yPosition);
-                doc.text('Rs' + itemTotal.toFixed(2), 177, yPosition);
-
-                yPosition += 8;
+            let rate = cartItem.rate || 0;
+            let itemUnit = cartItem.unit || 'kg';
+            let price = 0;
+            if (itemUnit === 'kg') {
+                price = rate * (parseFloat(cartItem.quantity) || 0);
+            } else if (itemUnit === 'gm') {
+                price = (rate * (parseFloat(cartItem.quantity) || 0)) / 1000;
+            } else if (itemUnit === 'Pc' || itemUnit === 'Carton') {
+                price = cartItem.price || 0;
             }
+            const discount = cartItem.discount || 0;
+            const finalPrice = price * (1 - discount / 100);
+            const productName = cartItem.productId ? this.products.find(p => p.serialNumber === cartItem.productId).name : '';
+            doc.text((index + 1).toString(), xPositions.sno, yPosition);
+            doc.text(productName, xPositions.product, yPosition, { maxWidth: xPositions.qty - xPositions.product - 2 });
+            doc.text(cartItem.quantity.toString(), xPositions.qty, yPosition);
+            doc.text(itemUnit, xPositions.unit, yPosition);
+            let rateLabel = '/ Kg'; // Always show / Kg for all units
+            doc.setFont('times', 'normal');
+            doc.text('Rs. ' + rate.toFixed(2) + ' ' + rateLabel, xPositions.rate, yPosition);
+            doc.setFont('times', 'normal');
+            doc.text('Rs. ' + price.toFixed(2), xPositions.price, yPosition);
+            doc.setFont('times', 'normal');
+            doc.text((discount.toString() + '%'), xPositions.discount, yPosition); // ensure discount value is printed
+            doc.setFont('times', 'normal');
+            doc.text('Rs. ' + finalPrice.toFixed(2), xPositions.final, yPosition);
+            yPosition += 8;
         });
-
-        // Total section
         const totalY = yPosition + 10;
         doc.line(20, totalY - 5, 190, totalY - 5);
-        
-        doc.setFont(undefined, 'bold');
-        doc.setFontSize(12);
-        doc.text('TOTAL AMOUNT:', 140, totalY);
-        doc.text('Rs' + total.toFixed(2), 177, totalY);
-
-        // Footer
-        const footerY = totalY + 20;
+        doc.setFont('times', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(0, 100, 0); // Deep green
+        doc.text('TOTAL AMOUNT: Rs. ' + total.toFixed(2), 105, totalY + 8, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(13);
+        doc.setTextColor(255, 87, 34); // Orange for final discount
+        doc.text('Final Discount: ' + finalDiscount.toFixed(2) + '%', 105, totalY + 18, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(13);
+        doc.setTextColor(0, 100, 0); // Green for discounted total
+        doc.text('Discounted Total Amount: Rs. ' + discountedTotal.toFixed(2), 105, totalY + 28, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(13);
+        doc.setTextColor(255, 87, 34); // Orange for GST
+        doc.text('GST: ' + gst.toFixed(2) + '%', 105, totalY + 38, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(20); // Increased size for final amount
+        doc.setTextColor(255, 87, 34); // Orange for final amount
+        doc.text('Final Amount to be Paid: Rs. ' + finalAmount.toFixed(2), 105, totalY + 55, { align: 'center' });
+        doc.setTextColor(0, 0, 0); // Reset to black for footer
+        const footerY = totalY + 60; // Increased vertical gap before footer
+        doc.setFont('times', 'normal');
         doc.setFontSize(8);
-        doc.setFont(undefined, 'normal');
         doc.text('Thank you for shopping with Kalimata Grocery!', 105, footerY, { align: 'center' });
         doc.text('Visit us again for fresh products and great deals.', 105, footerY + 7, { align: 'center' });
-        
-        // Terms and conditions
         doc.text('Terms: All sales are final. Exchange only with receipt within 24 hours.', 105, footerY + 20, { align: 'center' });
-
-        // Save the PDF
         const fileName = 'Kalimata_Grocery_Bill_' + billNumber + '.pdf';
         doc.save(fileName);
-
-        // Show success message
         alert('Bill generated successfully! File saved as: ' + fileName);
-        
-        // Close modal after generating bill
+        this.closeModal();
+    }
+
+    generateMartBill() {
+        // Recalculate total and final amount for PDF using same logic as updateTotal
+        let total = 0;
+        this.currentCheckout.validItems.forEach(cartItem => {
+            let itemUnit = cartItem.unit || 'kg';
+            let discountedPrice = 0;
+            if (itemUnit === 'Pc' || itemUnit === 'Carton') {
+                discountedPrice = (cartItem.price || 0) * (100 - (cartItem.discount || 0)) / 100;
+            } else if (itemUnit === 'kg') {
+                discountedPrice = (cartItem.rate || 0) * (parseFloat(cartItem.quantity) || 0) * (100 - (cartItem.discount || 0)) / 100;
+            } else if (itemUnit === 'gm') {
+                discountedPrice = ((cartItem.rate || 0) * (parseFloat(cartItem.quantity) || 0) / 1000) * (100 - (cartItem.discount || 0)) / 100;
+            }
+            total += discountedPrice;
+        });
+        const finalDiscountInput = document.getElementById('final-discount-input');
+        const gstInput = document.getElementById('gst-input');
+        let finalDiscount = parseFloat(finalDiscountInput.value) || 0;
+        let gst = parseFloat(gstInput.value) || 0;
+        let discountedTotal = total * (100 - finalDiscount) / 100;
+        let finalAmount = discountedTotal * (100 + gst) / 100;
+        this.createMartPDFBill(this.currentCheckout.validItems, total, finalDiscount, gst, discountedTotal, finalAmount);
+    }
+
+    createMartPDFBill(validItems, total, finalDiscount, gst, discountedTotal, finalAmount) {
+        const { jsPDF } = window.jspdf;
+        // 3 inch width = 76.2mm, keep height as A7 (105mm)
+        const width = 76.2 * 2.83465;
+        const height = 105 * 2.83465;
+        const doc = new jsPDF({ unit: 'pt', format: [width, height] });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(10); // Smaller font for header
+        doc.setTextColor(76, 175, 80);
+        doc.text('KALI MATA ENTERPRISES', width/2, 22, { align: 'center' });
+        doc.setFont('times', 'normal');
+        doc.setFontSize(6); // Smaller font for address
+        doc.setTextColor(0, 0, 0);
+        doc.text('Ground Floor, 493 Nabajiban Colony (Near Shiv Mandir),', width/2, 32, { align: 'center' });
+        doc.text('Nabajiban School Road, Kolkata, North 24 Pgns, WB-700158', width/2, 39, { align: 'center' });
+        doc.line(10, 44, width-10, 44);
+        const currentDate = new Date();
+        const billNumber = 'KG' + Date.now().toString().slice(-6);
+        doc.setFontSize(5); // Smaller font for bill info
+        doc.text(`Bill No: ${billNumber}  Date: ${currentDate.toLocaleDateString()}  Time: ${currentDate.toLocaleTimeString()}`,
+            12, 48);
+        doc.setFont('times', 'bold');
+        doc.setFontSize(6); // Smaller font for table header
+        // Adjusted header positions for compactness and 2mm gaps (2mm = ~5.67pt)
+        // Wider gaps for clarity
+        const headerX = {
+            product: 12,
+            qty: 55,
+            unit: 80,
+            rate: 105,
+            price: 130,
+            discount: 155,
+            final: 180
+        };
+        doc.text('Product', headerX.product, 58);
+        doc.text('Qty', headerX.qty, 58);
+        doc.text('Unit', headerX.unit, 58);
+        doc.text('Rate (/Kg)', headerX.rate, 58);
+        doc.text('Price', headerX.price, 58);
+        doc.text('Discount', headerX.discount, 58);
+        doc.text('Final', headerX.final, 58);
+        doc.line(10, 61, width-10, 61);
+        doc.setFont('times', 'normal');
+        let yPosition = 68;
+        validItems.forEach((cartItem, index) => {
+            let itemUnit = cartItem.unit || 'kg';
+            let price = 0;
+            let rate = cartItem.rate || 0;
+            if (itemUnit === 'kg') {
+                price = rate * (parseFloat(cartItem.quantity) || 0);
+            } else if (itemUnit === 'gm') {
+                price = (rate * (parseFloat(cartItem.quantity) || 0)) / 1000;
+            } else if (itemUnit === 'Pc' || itemUnit === 'Carton') {
+                price = cartItem.price || 0;
+            }
+            const discount = cartItem.discount || 0;
+            const finalPrice = price * (100 - discount) / 100;
+            const productName = cartItem.productId ? this.products.find(p => p.serialNumber === cartItem.productId).name : '';
+            doc.setFontSize(5); // Even smaller font for table rows
+            doc.text(productName, headerX.product, yPosition);
+            doc.text(cartItem.quantity.toString(), headerX.qty, yPosition);
+            doc.text(itemUnit, headerX.unit, yPosition);
+            doc.text('Rs.' + rate.toFixed(2), headerX.rate, yPosition);
+            doc.text('Rs.' + price.toFixed(2), headerX.price, yPosition); // 2mm gap after Rate
+            doc.text(discount.toString() + '%', headerX.discount, yPosition); // 2mm gap after Price
+            doc.text('Rs.' + finalPrice.toFixed(2), headerX.final, yPosition); // 2mm gap after Discount
+            yPosition += 8;
+        });
+        doc.line(10, yPosition, width-10, yPosition);
+        doc.setFont('times', 'bold');
+        doc.setFontSize(7); // Smaller font for totals
+        doc.setTextColor(0, 100, 0);
+        doc.text('TOTAL: Rs. ' + total.toFixed(2), width/2, yPosition+11, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(6);
+        doc.setTextColor(255, 87, 34);
+        doc.text('Final Discount: ' + finalDiscount.toFixed(2) + '%', width/2, yPosition+18, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(6);
+        doc.setTextColor(0, 100, 0);
+        doc.text('Discounted Total Amount: Rs. ' + discountedTotal.toFixed(2), width/2, yPosition+25, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(6);
+        doc.setTextColor(255, 87, 34);
+        doc.text('GST: ' + gst.toFixed(2) + '%', width/2, yPosition+32, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(255, 87, 34);
+        doc.text('Final Amount: Rs. ' + finalAmount.toFixed(2), width/2, yPosition+40, { align: 'center' });
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('times', 'normal');
+        doc.setFontSize(5);
+        doc.text('Thank you for shopping!', width/2, yPosition+48, { align: 'center' });
+        const fileName = 'KaliMata_Mart_Bill_' + billNumber + '.pdf';
+        doc.save(fileName);
+        alert('Mart Bill generated successfully! File saved as: ' + fileName);
         this.closeModal();
     }
 
