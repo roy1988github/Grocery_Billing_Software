@@ -633,3 +633,38 @@ main {
 .cart-item {
     animation: fadeIn 0.5s ease;
 }
+
+.product-search {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #4CAF50;
+    border-radius: 6px;
+    font-size: 14px;
+    background: white;
+    transition: border-color 0.3s ease;
+    margin-bottom: 2px;
+}
+.product-search:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+}
+.product-search-suggestions {
+    position: absolute;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(76,175,80,0.08);
+    z-index: 10;
+    max-height: 180px;
+    overflow-y: auto;
+    width: 90%;
+}
+.suggestion {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+}
+.suggestion:hover {
+    background: #f8f9fa;
+}

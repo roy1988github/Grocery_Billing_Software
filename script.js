@@ -198,14 +198,8 @@ class ShoppingCart {
         let rateLDisabled = (cartItem.unit === 'kg' || cartItem.unit === 'gm') ? 'disabled' : '';
 
         cartItemElement.innerHTML = `
-            <select class="product-select" data-item-id="${cartItem.id}">
-                <option value="">Select a product...</option>
-                ${this.products.map(product => 
-                    `<option value="${product.serialNumber}" ${cartItem.productId === product.serialNumber ? 'selected' : ''}>
-                        ${product.name}
-                    </option>`
-                ).join('')}
-            </select>
+            <input type="text" class="product-search" placeholder="Product" data-item-id="${cartItem.id}" autocomplete="off">
+            <div class="product-search-suggestions" data-item-id="${cartItem.id}" style="display:none;"></div>
             <input type="number" class="quantity-input" min="0.1" step="0.1" max="100" value="${cartItem.quantity}" data-item-id="${cartItem.id}">
             <select class="unit-select" data-item-id="${cartItem.id}">
                 <option value="kg" ${cartItem.unit === 'kg' ? 'selected' : ''}>Kg</option>
@@ -234,7 +228,8 @@ class ShoppingCart {
     }
 
     setupCartItemEventListeners(itemId) {
-        const productSelect = document.querySelector(`select.product-select[data-item-id="${itemId}"]`);
+        const productSearch = document.querySelector(`input.product-search[data-item-id="${itemId}"]`);
+        const suggestionsBox = document.querySelector(`.product-search-suggestions[data-item-id="${itemId}"]`);
         const quantityInput = document.querySelector(`input.quantity-input[data-item-id="${itemId}"]`);
         const unitSelect = document.querySelector(`select.unit-select[data-item-id="${itemId}"]`);
         const rateInput = document.querySelector(`input.rate-input[data-item-id="${itemId}"]`);
@@ -242,9 +237,30 @@ class ShoppingCart {
         const discountInput = document.querySelector(`input.discount-input[data-item-id="${itemId}"]`);
         const removeBtn = document.querySelector(`button[data-item-id="${itemId}"]`);
 
-        productSelect.addEventListener('change', (e) => {
-            this.updateCartItem(itemId, 'product', parseInt(e.target.value));
+        productSearch.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const matches = this.products.filter(product => product.name.toLowerCase().includes(query));
+            if (matches.length > 0 && query.length > 0) {
+                suggestionsBox.innerHTML = matches.map(product => `<div class="suggestion" data-serial="${product.serialNumber}">${product.name}</div>`).join('');
+                suggestionsBox.style.display = 'block';
+            } else {
+                suggestionsBox.innerHTML = '';
+                suggestionsBox.style.display = 'none';
+            }
         });
+        suggestionsBox.addEventListener('click', (e) => {
+            if (e.target.classList.contains('suggestion')) {
+                productSearch.value = e.target.textContent;
+                this.updateCartItem(itemId, 'product', parseInt(e.target.getAttribute('data-serial')));
+                suggestionsBox.style.display = 'none';
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (!productSearch.contains(e.target) && !suggestionsBox.contains(e.target)) {
+                suggestionsBox.style.display = 'none';
+            }
+        });
+
         quantityInput.addEventListener('input', (e) => {
             this.updateCartItem(itemId, 'quantity', parseFloat(e.target.value) || 0.1);
         });
@@ -613,7 +629,7 @@ class ShoppingCart {
             doc.setFont('times', 'normal');
             doc.text('Rs. ' + rate.toFixed(2) + ' ' + rateLabel, xPositions.rate, yPosition);
             doc.setFont('times', 'normal');
-            doc.text('Rs. ' + price.toFixed(2), xPositions.price, yPosition);
+            doc.text('Rs. ' + price.toFixed(2), xPositions.price, yPosition); // 2mm gap after Rate (/Kg)
             doc.setFont('times', 'normal');
             doc.text((discount.toString() + '%'), xPositions.discount, yPosition); // ensure discount value is printed
             doc.setFont('times', 'normal');
@@ -656,9 +672,13 @@ class ShoppingCart {
     }
 
     generateMartBill() {
-        // Recalculate total and final amount for PDF using same logic as updateTotal
+        if (!this.currentCheckout) {
+            alert('No checkout data available.');
+            return;
+        }
         let total = 0;
-        this.currentCheckout.validItems.forEach(cartItem => {
+        let validItems = this.currentCheckout.validItems;
+        validItems.forEach(cartItem => {
             let itemUnit = cartItem.unit || 'kg';
             let discountedPrice = 0;
             if (itemUnit === 'Pc' || itemUnit === 'Carton') {
@@ -676,53 +696,53 @@ class ShoppingCart {
         let gst = parseFloat(gstInput.value) || 0;
         let discountedTotal = total * (100 - finalDiscount) / 100;
         let finalAmount = discountedTotal * (100 + gst) / 100;
-        this.createMartPDFBill(this.currentCheckout.validItems, total, finalDiscount, gst, discountedTotal, finalAmount);
+        this.createMartPDFBill(validItems, total, finalDiscount, gst, discountedTotal, finalAmount);
     }
 
     createMartPDFBill(validItems, total, finalDiscount, gst, discountedTotal, finalAmount) {
         const { jsPDF } = window.jspdf;
-        // 3 inch width = 76.2mm, keep height as A7 (105mm)
-        const width = 76.2 * 2.83465;
+        const width = 76.2 * 2.83465; // 3 inches in points
         const height = 105 * 2.83465;
         const doc = new jsPDF({ unit: 'pt', format: [width, height] });
         doc.setFont('times', 'bold');
-        doc.setFontSize(10); // Smaller font for header
-        doc.setTextColor(76, 175, 80);
-        doc.text('KALI MATA ENTERPRISES', width/2, 22, { align: 'center' });
+        doc.setFontSize(10);
+        doc.text('KALI MATA ENTERPRISES', width/2, 20, { align: 'center' });
         doc.setFont('times', 'normal');
-        doc.setFontSize(6); // Smaller font for address
-        doc.setTextColor(0, 0, 0);
-        doc.text('Ground Floor, 493 Nabajiban Colony (Near Shiv Mandir),', width/2, 32, { align: 'center' });
-        doc.text('Nabajiban School Road, Kolkata, North 24 Pgns, WB-700158', width/2, 39, { align: 'center' });
-        doc.line(10, 44, width-10, 44);
+        doc.setFontSize(7);
+        doc.text('Ground Floor, 493 Nabajiban Colony', width/2, 32, { align: 'center' });
+        doc.text('Nabajiban School Road, Kolkata, WB-700158', width/2, 41, { align: 'center' });
+        doc.text('Phone: +91 93303 53449', width/2, 50, { align: 'center' });
+        doc.line(10, 56, width-10, 56);
+        // Bill number, date & time
+        const billNumber = 'Kalimata_' + Date.now().toString().slice(-6);
         const currentDate = new Date();
-        const billNumber = 'KG' + Date.now().toString().slice(-6);
-        doc.setFontSize(5); // Smaller font for bill info
-        doc.text(`Bill No: ${billNumber}  Date: ${currentDate.toLocaleDateString()}  Time: ${currentDate.toLocaleTimeString()}`,
-            12, 48);
-        doc.setFont('times', 'bold');
-        doc.setFontSize(6); // Smaller font for table header
-        // Adjusted header positions for compactness and 2mm gaps (2mm = ~5.67pt)
-        // Wider gaps for clarity
-        const headerX = {
-            product: 12,
-            qty: 55,
-            unit: 80,
-            rate: 105,
-            price: 130,
-            discount: 155,
-            final: 180
-        };
-        doc.text('Product', headerX.product, 58);
-        doc.text('Qty', headerX.qty, 58);
-        doc.text('Unit', headerX.unit, 58);
-        doc.text('Rate (/Kg)', headerX.rate, 58);
-        doc.text('Price', headerX.price, 58);
-        doc.text('Discount', headerX.discount, 58);
-        doc.text('Final', headerX.final, 58);
-        doc.line(10, 61, width-10, 61);
+        const billInfo = `Bill No: ${billNumber}    Date: ${currentDate.toLocaleDateString()}    Time: ${currentDate.toLocaleTimeString()}`;
         doc.setFont('times', 'normal');
-        let yPosition = 68;
+        doc.setFontSize(7);
+        doc.text(billInfo, 12, 66, { align: 'left' });
+        doc.line(10, 72, width-10, 72);
+        // Table header
+        const leftMargin = 12;
+        const colWidths = [32, 18, 18, 28, 28, 28, 28];
+        let headerX = [];
+        let x = leftMargin;
+        for (let w of colWidths) {
+            headerX.push(x);
+            x += w;
+        }
+        doc.setFont('times', 'bold');
+        doc.setFontSize(7);
+        doc.text('Product', headerX[0], 80, { maxWidth: colWidths[0] - 2 });
+        doc.text('Qty', headerX[1], 80, { maxWidth: colWidths[1] - 2 });
+        doc.text('Unit', headerX[2], 80, { maxWidth: colWidths[2] - 2 });
+        doc.text('Rate/Kg', headerX[3], 80, { maxWidth: colWidths[3] - 2 });
+        doc.text('Price', headerX[4], 80, { maxWidth: colWidths[4] - 2 });
+        doc.text('Disc', headerX[5], 80, { maxWidth: colWidths[5] - 2 });
+        doc.text('Final', headerX[6], 80, { maxWidth: colWidths[6] - 2 });
+        doc.line(10, 84, width-10, 84);
+        doc.setFont('times', 'normal');
+        doc.setFontSize(7);
+        let yPosition = 96;
         validItems.forEach((cartItem, index) => {
             let itemUnit = cartItem.unit || 'kg';
             let price = 0;
@@ -735,44 +755,43 @@ class ShoppingCart {
                 price = cartItem.price || 0;
             }
             const discount = cartItem.discount || 0;
-            const finalPrice = price * (100 - discount) / 100;
+            const finalPrice = price * (1 - discount / 100);
             const productName = cartItem.productId ? this.products.find(p => p.serialNumber === cartItem.productId).name : '';
-            doc.setFontSize(5); // Even smaller font for table rows
-            doc.text(productName, headerX.product, yPosition);
-            doc.text(cartItem.quantity.toString(), headerX.qty, yPosition);
-            doc.text(itemUnit, headerX.unit, yPosition);
-            doc.text('Rs.' + rate.toFixed(2), headerX.rate, yPosition);
-            doc.text('Rs.' + price.toFixed(2), headerX.price, yPosition); // 2mm gap after Rate
-            doc.text(discount.toString() + '%', headerX.discount, yPosition); // 2mm gap after Price
-            doc.text('Rs.' + finalPrice.toFixed(2), headerX.final, yPosition); // 2mm gap after Discount
-            yPosition += 8;
+            doc.text(productName, headerX[0], yPosition, { maxWidth: colWidths[0] - 2 });
+            doc.text((cartItem.quantity ? cartItem.quantity.toString() : ''), headerX[1], yPosition, { maxWidth: colWidths[1] - 2 });
+            doc.text(itemUnit, headerX[2], yPosition, { maxWidth: colWidths[2] - 2 });
+            doc.text('Rs.' + rate.toFixed(2), headerX[3], yPosition, { maxWidth: colWidths[3] - 2 });
+            doc.text('Rs.' + price.toFixed(2), headerX[4], yPosition, { maxWidth: colWidths[4] - 2 });
+            doc.text(discount.toString() + '%', headerX[5], yPosition, { maxWidth: colWidths[5] - 2 });
+            doc.text('Rs.' + finalPrice.toFixed(2), headerX[6], yPosition, { maxWidth: colWidths[6] - 2 });
+            yPosition += 18;
         });
-        doc.line(10, yPosition, width-10, yPosition);
+        doc.line(10, yPosition - 6, width-10, yPosition - 6);
         doc.setFont('times', 'bold');
-        doc.setFontSize(7); // Smaller font for totals
+        doc.setFontSize(9);
         doc.setTextColor(0, 100, 0);
-        doc.text('TOTAL: Rs. ' + total.toFixed(2), width/2, yPosition+11, { align: 'center' });
-        doc.setFont('times', 'bold');
-        doc.setFontSize(6);
-        doc.setTextColor(255, 87, 34);
-        doc.text('Final Discount: ' + finalDiscount.toFixed(2) + '%', width/2, yPosition+18, { align: 'center' });
-        doc.setFont('times', 'bold');
-        doc.setFontSize(6);
-        doc.setTextColor(0, 100, 0);
-        doc.text('Discounted Total Amount: Rs. ' + discountedTotal.toFixed(2), width/2, yPosition+25, { align: 'center' });
-        doc.setFont('times', 'bold');
-        doc.setFontSize(6);
-        doc.setTextColor(255, 87, 34);
-        doc.text('GST: ' + gst.toFixed(2) + '%', width/2, yPosition+32, { align: 'center' });
+        doc.text('TOTAL: Rs. ' + total.toFixed(2), width/2, yPosition+18, { align: 'center' });
         doc.setFont('times', 'bold');
         doc.setFontSize(8);
         doc.setTextColor(255, 87, 34);
-        doc.text('Final Amount: Rs. ' + finalAmount.toFixed(2), width/2, yPosition+40, { align: 'center' });
+        doc.text('Final Discount: ' + finalDiscount.toFixed(2) + '%', width/2, yPosition+26, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(0, 100, 0);
+        doc.text('Discounted Total: Rs. ' + discountedTotal.toFixed(2), width/2, yPosition+34, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(255, 87, 34);
+        doc.text('GST: ' + gst.toFixed(2) + '%', width/2, yPosition+42, { align: 'center' });
+        doc.setFont('times', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(255, 87, 34);
+        doc.text('Final Amount: Rs. ' + finalAmount.toFixed(2), width/2, yPosition+52, { align: 'center' });
         doc.setTextColor(0, 0, 0);
         doc.setFont('times', 'normal');
-        doc.setFontSize(5);
-        doc.text('Thank you for shopping!', width/2, yPosition+48, { align: 'center' });
-        const fileName = 'KaliMata_Mart_Bill_' + billNumber + '.pdf';
+        doc.setFontSize(7);
+        doc.text('Thank you for shopping!', width/2, yPosition+60, { align: 'center' });
+        const fileName = billNumber + '.pdf';
         doc.save(fileName);
         alert('Mart Bill generated successfully! File saved as: ' + fileName);
         this.closeModal();
