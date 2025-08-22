@@ -530,6 +530,9 @@ class ShoppingCart {
             alert('No checkout data available.');
             return;
         }
+        // Get customer info
+        const customerName = document.getElementById('customer-name').value || '';
+        const customerMobile = document.getElementById('customer-mobile').value || '';
         // Recalculate total and final amount for PDF using same logic as updateTotal
         let total = 0;
         this.currentCheckout.validItems.forEach(cartItem => {
@@ -550,10 +553,10 @@ class ShoppingCart {
         let gst = parseFloat(gstInput.value) || 0;
         let discountedTotal = total * (100 - finalDiscount) / 100;
         let finalAmount = discountedTotal * (100 + gst) / 100;
-        this.createPDFBill(this.currentCheckout.validItems, total, finalDiscount, gst, discountedTotal, finalAmount);
+        this.createPDFBill(this.currentCheckout.validItems, total, finalDiscount, gst, discountedTotal, finalAmount, customerName, customerMobile);
     }
 
-    createPDFBill(validItems, total, finalDiscount, gst, discountedTotal, finalAmount) {
+    createPDFBill(validItems, total, finalDiscount, gst, discountedTotal, finalAmount, customerName, customerMobile) {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         // Bill header with logo
@@ -661,10 +664,15 @@ class ShoppingCart {
         doc.setTextColor(0, 0, 0); // Reset to black for footer
         const footerY = totalY + 60; // Increased vertical gap before footer
         doc.setFont('times', 'normal');
+        doc.setFontSize(10);
+        if (customerName || customerMobile) {
+            doc.text(`Customer: ${customerName}`, 105, footerY, { align: 'center' });
+            doc.text(`Mobile: ${customerMobile}`, 105, footerY + 7, { align: 'center' });
+        }
         doc.setFontSize(8);
-        doc.text('Thank you for shopping with Kalimata Grocery!', 105, footerY, { align: 'center' });
-        doc.text('Visit us again for fresh products and great deals.', 105, footerY + 7, { align: 'center' });
-        doc.text('Terms: All sales are final. Exchange only with receipt within 24 hours.', 105, footerY + 20, { align: 'center' });
+        doc.text('Thank you for shopping with Kalimata Grocery!', 105, footerY + 14, { align: 'center' });
+        doc.text('Visit us again for fresh products and great deals.', 105, footerY + 21, { align: 'center' });
+        doc.text('Terms: All sales are final. Exchange only with receipt within 24 hours.', 105, footerY + 34, { align: 'center' });
         const fileName = 'Kalimata_Grocery_Bill_' + billNumber + '.pdf';
         doc.save(fileName);
         alert('Bill generated successfully! File saved as: ' + fileName);
@@ -696,10 +704,13 @@ class ShoppingCart {
         let gst = parseFloat(gstInput.value) || 0;
         let discountedTotal = total * (100 - finalDiscount) / 100;
         let finalAmount = discountedTotal * (100 + gst) / 100;
-        this.createMartPDFBill(validItems, total, finalDiscount, gst, discountedTotal, finalAmount);
+        // Fetch customer info for Mart Bill
+        const customerName = document.getElementById('customer-name').value || '';
+        const customerMobile = document.getElementById('customer-mobile').value || '';
+        this.createMartPDFBill(validItems, total, finalDiscount, gst, discountedTotal, finalAmount, customerName, customerMobile);
     }
 
-    createMartPDFBill(validItems, total, finalDiscount, gst, discountedTotal, finalAmount) {
+    createMartPDFBill(validItems, total, finalDiscount, gst, discountedTotal, finalAmount, customerName, customerMobile) {
         const { jsPDF } = window.jspdf;
         const width = 76.2 * 2.83465; // 3 inches in points
         const height = 105 * 2.83465;
@@ -790,7 +801,14 @@ class ShoppingCart {
         doc.setTextColor(0, 0, 0);
         doc.setFont('times', 'normal');
         doc.setFontSize(7);
-        doc.text('Thank you for shopping!', width/2, yPosition+60, { align: 'center' });
+        // Add customer info at the bottom of Mart Bill
+        let customerInfoY = yPosition + 60;
+        if (customerName || customerMobile) {
+            doc.text(`Customer: ${customerName}`, width/2, customerInfoY, { align: 'center' });
+            doc.text(`Mobile: ${customerMobile}`, width/2, customerInfoY + 10, { align: 'center' });
+            customerInfoY += 20;
+        }
+        doc.text('Thank you for shopping!', width/2, customerInfoY, { align: 'center' });
         const fileName = billNumber + '.pdf';
         doc.save(fileName);
         alert('Mart Bill generated successfully! File saved as: ' + fileName);

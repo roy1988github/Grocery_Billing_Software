@@ -668,3 +668,25 @@ main {
 .suggestion:hover {
     background: #f8f9fa;
 }
+
+.customer-info-section {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 18px;
+}
+.customer-input {
+    padding: 10px;
+    border: 2px solid #4CAF50;
+    border-radius: 8px;
+    font-size: 15px;
+    width: 220px;
+    background: #f8f9fa;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    box-shadow: 0 2px 8px rgba(76,175,80,0.08);
+}
+.customer-input:focus {
+    border-color: #45a049;
+    box-shadow: 0 0 0 3px rgba(76,175,80,0.15);
+    outline: none;
+}
