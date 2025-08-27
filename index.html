@@ -10,10 +10,22 @@
 <body>
     <div class="container">
         <header>
-            <img src="Kalimata_Logo.png" alt="Kali Mata Enterprises Logo" class="logo-img" />
-            <h1>🛒 Kali Mata Enterprises</h1>
+            <img src="Kalimata_Logo.png" alt="Kalimata Enterprises Logo" class="logo-img" />
+            <h1>🛒 Kalimata Enterprises</h1>
             <p>Fresh Products, Great Prices!</p>
         </header>
+
+        <!-- Customer Info at top -->
+        <div class="customer-info-top">
+            <div class="customer-info-vertical">
+                <label for="customer-name" class="customer-label">Customer Name:</label>
+                <input type="text" id="customer-name" class="customer-input" placeholder="Customer Name" />
+            </div>
+            <div class="customer-info-vertical">
+                <label for="customer-mobile" class="customer-label">Mobile Number:</label>
+                <input type="text" id="customer-mobile" class="customer-input" placeholder="Mobile Number" />
+            </div>
+        </div>
 
         <main>
             <div class="shopping-cart">
@@ -25,8 +37,6 @@
                     <div class="header-item">Unit</div>
                     <div class="header-item">Rate</div>
                     <div class="header-item">Price</div>
-                    <div class="header-item">Discount</div>
-                    <div class="header-item">Discounted / Final Price</div>
                     <div class="header-item">Action</div>
                 </div>
 
@@ -58,12 +68,6 @@
                     <div class="final-amount-row">
                         <span>Final Amount to be Paid: </span>
                         <span id="final-amount-value">₹0.00</span>
-                    </div>
-                    <div class="customer-info-section">
-                        <label for="customer-name" class="customer-label">Customer Name:</label>
-                        <input type="text" id="customer-name" class="customer-input" placeholder="Customer Name" />
-                        <label for="customer-mobile" class="customer-label">Mobile Number:</label>
-                        <input type="text" id="customer-mobile" class="customer-input" placeholder="Mobile Number" />
                     </div>
                 </div>
 

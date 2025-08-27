@@ -159,6 +159,26 @@ class ShoppingCart {
         document.getElementById('final-discount-input').addEventListener('input', () => {
             this.updateTotal();
         });
+
+        // Mobile number validation
+        const mobileInput = document.getElementById('customer-mobile');
+        mobileInput.setAttribute('maxlength', '10');
+        mobileInput.addEventListener('input', function() {
+            // Remove non-digit characters
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value.length > 10) {
+                this.value = this.value.slice(0, 10);
+            }
+        });
+        // Validate on checkout
+        document.getElementById('checkout-btn').addEventListener('click', () => {
+            const mobile = mobileInput.value;
+            if (mobile.length !== 10) {
+                alert('Mobile Number must be exactly 10 digits.');
+                return;
+            }
+            this.checkout();
+        });
     }
 
     addFirstItem() {
@@ -198,8 +218,7 @@ class ShoppingCart {
         let rateLDisabled = (cartItem.unit === 'kg' || cartItem.unit === 'gm') ? 'disabled' : '';
 
         cartItemElement.innerHTML = `
-            <input type="text" class="product-search" placeholder="Product" data-item-id="${cartItem.id}" autocomplete="off">
-            <div class="product-search-suggestions" data-item-id="${cartItem.id}" style="display:none;"></div>
+            <input type="text" class="product-input" placeholder="Product" data-item-id="${cartItem.id}" autocomplete="off">
             <input type="number" class="quantity-input" min="0.1" step="0.1" max="100" value="${cartItem.quantity}" data-item-id="${cartItem.id}">
             <select class="unit-select" data-item-id="${cartItem.id}">
                 <option value="kg" ${cartItem.unit === 'kg' ? 'selected' : ''}>Kg</option>
@@ -216,10 +235,6 @@ class ShoppingCart {
             <div class="price-display">
                 <span class="price-value">₹0.00</span>
             </div>
-            <input type="number" class="discount-input" min="0" max="100" step="0.01" value="${cartItem.discount || 0}" placeholder="Discount %" data-item-id="${cartItem.id}">
-            <div class="final-price-display">
-                <span class="final-price-value">₹0.00</span>
-            </div>
             <button class="remove-btn" data-item-id="${cartItem.id}">×</button>
         `;
 
@@ -228,39 +243,16 @@ class ShoppingCart {
     }
 
     setupCartItemEventListeners(itemId) {
-        const productSearch = document.querySelector(`input.product-search[data-item-id="${itemId}"]`);
-        const suggestionsBox = document.querySelector(`.product-search-suggestions[data-item-id="${itemId}"]`);
+        const productInput = document.querySelector(`input.product-input[data-item-id="${itemId}"]`);
         const quantityInput = document.querySelector(`input.quantity-input[data-item-id="${itemId}"]`);
         const unitSelect = document.querySelector(`select.unit-select[data-item-id="${itemId}"]`);
         const rateInput = document.querySelector(`input.rate-input[data-item-id="${itemId}"]`);
         const rateUnitSelect = document.querySelector(`select.rate-unit-select[data-item-id="${itemId}"]`);
-        const discountInput = document.querySelector(`input.discount-input[data-item-id="${itemId}"]`);
         const removeBtn = document.querySelector(`button[data-item-id="${itemId}"]`);
 
-        productSearch.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            const matches = this.products.filter(product => product.name.toLowerCase().includes(query));
-            if (matches.length > 0 && query.length > 0) {
-                suggestionsBox.innerHTML = matches.map(product => `<div class="suggestion" data-serial="${product.serialNumber}">${product.name}</div>`).join('');
-                suggestionsBox.style.display = 'block';
-            } else {
-                suggestionsBox.innerHTML = '';
-                suggestionsBox.style.display = 'none';
-            }
+        productInput.addEventListener('input', (e) => {
+            this.updateCartItem(itemId, 'productName', e.target.value);
         });
-        suggestionsBox.addEventListener('click', (e) => {
-            if (e.target.classList.contains('suggestion')) {
-                productSearch.value = e.target.textContent;
-                this.updateCartItem(itemId, 'product', parseInt(e.target.getAttribute('data-serial')));
-                suggestionsBox.style.display = 'none';
-            }
-        });
-        document.addEventListener('click', (e) => {
-            if (!productSearch.contains(e.target) && !suggestionsBox.contains(e.target)) {
-                suggestionsBox.style.display = 'none';
-            }
-        });
-
         quantityInput.addEventListener('input', (e) => {
             this.updateCartItem(itemId, 'quantity', parseFloat(e.target.value) || 0.1);
         });
@@ -284,9 +276,6 @@ class ShoppingCart {
         });
         rateUnitSelect.addEventListener('change', (e) => {
             this.handleRateUnitChange(itemId, e.target.value);
-        });
-        discountInput.addEventListener('input', (e) => {
-            this.updateCartItem(itemId, 'discount', parseFloat(e.target.value) || 0);
         });
         removeBtn.addEventListener('click', () => {
             this.removeCartItem(itemId);
@@ -327,16 +316,14 @@ class ShoppingCart {
     updateCartItem(itemId, field, value) {
         const cartItem = this.cartItems.find(item => item.id === itemId);
         if (!cartItem) return;
-        if (field === 'product') {
-            cartItem.productId = value;
+        if (field === 'productName') {
+            cartItem.productName = value;
         } else if (field === 'quantity') {
             cartItem.quantity = Math.max(0.1, value);
         } else if (field === 'unit') {
             cartItem.unit = value;
         } else if (field === 'rate') {
             cartItem.rate = Math.max(0, value);
-        } else if (field === 'discount') {
-            cartItem.discount = Math.max(0, value);
         }
         if (!cartItem.rateUnit) cartItem.rateUnit = 'kg';
         this.updateCartItemDisplay(itemId);
@@ -347,9 +334,7 @@ class ShoppingCart {
         const cartItem = this.cartItems.find(item => item.id === itemId);
         const cartItemElement = document.querySelector(`[data-item-id="${itemId}"]`);
         const priceElement = cartItemElement.querySelector('.price-value');
-        const finalPriceElement = cartItemElement.querySelector('.final-price-value');
         let rate = cartItem.rate || 0;
-        let rateUnit = cartItem.rateUnit || 'kg';
         let itemUnit = cartItem.unit || 'kg';
         let price = 0;
         // Price calculation based on unit
@@ -357,14 +342,16 @@ class ShoppingCart {
             price = rate * (parseFloat(cartItem.quantity) || 0);
         } else if (itemUnit === 'gm') {
             price = (rate * (parseFloat(cartItem.quantity) || 0)) / 1000;
-        } else {
-            price = rate * (parseFloat(cartItem.quantity) || 0);
+        } else if (itemUnit === 'Pc' || itemUnit === 'Carton') {
+            price = cartItem.price || 0;
         }
+        // Only show price
+        priceElement.textContent = `₹${price.toFixed(2)}`;
+        cartItem.price = price;
+
         // Set up price input for Pc/Carton, else display calculated price
-        let priceInputHtml = '';
         if (itemUnit === 'Pc' || itemUnit === 'Carton') {
-            priceInputHtml = `<input type="number" class="price-input" min="0" step="0.01" value="${cartItem.price || ''}" placeholder="Enter Price" data-item-id="${cartItem.id}">`;
-            priceElement.innerHTML = priceInputHtml;
+            priceElement.innerHTML = `<input type="number" class="price-input" min="0" step="0.01" value="${cartItem.price || ''}" placeholder="Enter Price" data-item-id="${cartItem.id}">`;
             // Listen for price input changes
             const priceInput = cartItemElement.querySelector('.price-input');
             priceInput.addEventListener('input', (e) => {
@@ -374,21 +361,6 @@ class ShoppingCart {
         } else {
             priceElement.textContent = `₹${price.toFixed(2)}`;
             cartItem.price = price;
-        }
-        // Calculate final price using unified logic for all units
-        const discount = cartItem.discount || 0;
-        let finalPrice;
-        if (itemUnit === 'Pc' || itemUnit === 'Carton') {
-            finalPrice = cartItem.price * (100 - discount) / 100;
-            // Show Discounted Price even if discount is 0 and price is entered
-            if (!cartItem.discount && cartItem.price) {
-                finalPriceElement.textContent = `₹${cartItem.price.toFixed(2)}`;
-            } else {
-                finalPriceElement.textContent = `₹${finalPrice.toFixed(2)}`;
-            }
-        } else {
-            finalPrice = cartItem.price * (100 - discount) / 100;
-            finalPriceElement.textContent = `₹${finalPrice.toFixed(2)}`;
         }
     }
 
@@ -431,17 +403,16 @@ class ShoppingCart {
         let total = 0;
         this.cartItems.forEach(cartItem => {
             let itemUnit = cartItem.unit || 'kg';
-            let discountedPrice = 0;
+            let price = 0;
             if (itemUnit === 'Pc' || itemUnit === 'Carton') {
-                discountedPrice = (cartItem.price || 0) * (100 - (cartItem.discount || 0)) / 100;
+                price = cartItem.price || 0;
             } else if (itemUnit === 'kg') {
-                discountedPrice = (cartItem.rate || 0) * (parseFloat(cartItem.quantity) || 0) * (100 - (cartItem.discount || 0)) / 100;
+                price = (cartItem.rate || 0) * (parseFloat(cartItem.quantity) || 0);
             } else if (itemUnit === 'gm') {
-                discountedPrice = ((cartItem.rate || 0) * (parseFloat(cartItem.quantity) || 0) / 1000) * (100 - (cartItem.discount || 0)) / 100;
+                price = ((cartItem.rate || 0) * (parseFloat(cartItem.quantity) || 0) / 1000);
             }
-            total += discountedPrice;
+            total += price;
         });
-        // Always calculate Discounted Total and Final Amount directly
         document.getElementById('total-amount').textContent = `₹${total.toFixed(2)}`;
         const finalDiscountInput = document.getElementById('final-discount-input');
         const gstInput = document.getElementById('gst-input');
@@ -453,7 +424,6 @@ class ShoppingCart {
         discountedTotalValue.textContent = `₹${discountedTotal.toFixed(2)}`;
         let finalAmount = discountedTotal * (100 + gst) / 100;
         finalAmountValue.textContent = `₹${finalAmount.toFixed(2)}`;
-        // Update value instantly on input change
         finalDiscountInput.addEventListener('input', () => {
             let finalDiscount = parseFloat(finalDiscountInput.value) || 0;
             let gst = parseFloat(gstInput.value) || 0;
@@ -473,13 +443,12 @@ class ShoppingCart {
     }
 
     checkout() {
-        const validItems = this.cartItems.filter(item => item.productId && item.quantity > 0);
-        
+        // Only require productName and quantity > 0
+        const validItems = this.cartItems.filter(item => item.productName && item.productName.trim() !== '' && item.quantity > 0);
         if (validItems.length === 0) {
             alert('Please add at least one item to your cart before checkout.');
             return;
         }
-
         this.showCheckoutModal(validItems);
     }
 
@@ -525,6 +494,59 @@ class ShoppingCart {
         modal.style.display = 'none';
     }
 
+    // Helper to append customer profile to CSV
+    async appendCustomerProfile({customerName, customerMobile, billNumber, date, time, itemsPurchased, finalAmount}) {
+        // Read existing CSV
+        let csvText = '';
+        try {
+            const response = await fetch('Customer_Profile.csv');
+            csvText = await response.text();
+        } catch (e) {
+            csvText = 'Serial Number,Customer Name,Mobile Number,Bill Number,Date,Time,Items Purchased,Final Amount Paid\n';
+        }
+        let lines = csvText.trim().split('\n');
+        let serial = lines.length;
+        let newRow = `${serial},${customerName},${customerMobile},${billNumber},${date},${time},"${itemsPurchased}",${finalAmount}`;
+        lines.push(newRow);
+        // Save CSV (browser cannot write files directly, so this triggers a download)
+        let blob = new Blob([lines.join('\n') + '\n'], {type: 'text/csv'});
+        let a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'Customer_Profile.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    // Helper to append customer profile to JSON
+    async appendCustomerProfileJSON({customerName, customerMobile, billNumber, date, time, itemsPurchased, finalAmount}) {
+        let jsonArr = [];
+        try {
+            const response = await fetch('Customer_Profile.json');
+            jsonArr = await response.json();
+        } catch (e) {
+            jsonArr = [];
+        }
+        let serial = jsonArr.length + 1;
+        jsonArr.push({
+            "Serial Number": serial,
+            "Customer Name": customerName,
+            "Mobile Number": customerMobile,
+            "Bill Number": billNumber,
+            "Date": date,
+            "Time": time,
+            "Items Purchased": itemsPurchased,
+            "Final Amount Paid": finalAmount
+        });
+        let blob = new Blob([JSON.stringify(jsonArr, null, 2)], {type: 'application/json'});
+        let a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'Customer_Profile.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
     generateBill() {
         if (!this.currentCheckout) {
             alert('No checkout data available.');
@@ -566,7 +588,7 @@ class ShoppingCart {
         doc.setFont('times', 'bold');
         doc.setFontSize(28);
         doc.setTextColor(76, 175, 80);
-        doc.text('KALI MATA ENTERPRISES', 105, 25, { align: 'center' });
+        doc.text('KALIMATA ENTERPRISES', 105, 25, { align: 'center' });
         doc.setFont('times', 'italic');
         doc.setFontSize(14);
         doc.setTextColor(255, 87, 34);
@@ -580,7 +602,7 @@ class ShoppingCart {
         doc.text('Phone: +91 93303 53449 | Email: info@kalimatagrocery.com', 105, 56, { align: 'center' });
         doc.line(20, 61, 190, 61);
         const currentDate = new Date();
-        const billNumber = 'KG' + Date.now().toString().slice(-6);
+        const billNumber = 'Kalimata_' + Date.now().toString().slice(-6);
         // Bill No, Date, Time in one line
         doc.setFont('times', 'normal');
         doc.setFontSize(10);
@@ -595,9 +617,8 @@ class ShoppingCart {
             qty: 60,
             unit: 75,
             rate: 90,
-            price: 125, // further increased gap after Rate
-            discount: 145,
-            final: 165
+            price: 125,
+            action: 145
         };
         doc.text('S.No', xPositions.sno, tableStartY);
         doc.text('Product', xPositions.product, tableStartY);
@@ -605,8 +626,6 @@ class ShoppingCart {
         doc.text('Unit', xPositions.unit, tableStartY);
         doc.text('Rate', xPositions.rate, tableStartY);
         doc.text('Price', xPositions.price, tableStartY);
-        doc.text('Discount', xPositions.discount, tableStartY);
-        doc.text('Final Price', xPositions.final, tableStartY);
         doc.line(20, tableStartY + 3, 190, tableStartY + 3);
         doc.setFont('times', 'normal');
         let yPosition = tableStartY + 12;
@@ -621,22 +640,13 @@ class ShoppingCart {
             } else if (itemUnit === 'Pc' || itemUnit === 'Carton') {
                 price = cartItem.price || 0;
             }
-            const discount = cartItem.discount || 0;
-            const finalPrice = price * (1 - discount / 100);
-            const productName = cartItem.productId ? this.products.find(p => p.serialNumber === cartItem.productId).name : '';
+            const productName = cartItem.productName || '';
             doc.text((index + 1).toString(), xPositions.sno, yPosition);
             doc.text(productName, xPositions.product, yPosition, { maxWidth: xPositions.qty - xPositions.product - 2 });
             doc.text(cartItem.quantity.toString(), xPositions.qty, yPosition);
             doc.text(itemUnit, xPositions.unit, yPosition);
-            let rateLabel = '/ Kg'; // Always show / Kg for all units
-            doc.setFont('times', 'normal');
-            doc.text('Rs. ' + rate.toFixed(2) + ' ' + rateLabel, xPositions.rate, yPosition);
-            doc.setFont('times', 'normal');
-            doc.text('Rs. ' + price.toFixed(2), xPositions.price, yPosition); // 2mm gap after Rate (/Kg)
-            doc.setFont('times', 'normal');
-            doc.text((discount.toString() + '%'), xPositions.discount, yPosition); // ensure discount value is printed
-            doc.setFont('times', 'normal');
-            doc.text('Rs. ' + finalPrice.toFixed(2), xPositions.final, yPosition);
+            doc.text('Rs. ' + rate.toFixed(2), xPositions.rate, yPosition);
+            doc.text('Rs. ' + price.toFixed(2), xPositions.price, yPosition);
             yPosition += 8;
         });
         const totalY = yPosition + 10;
@@ -676,6 +686,25 @@ class ShoppingCart {
         const fileName = 'Kalimata_Grocery_Bill_' + billNumber + '.pdf';
         doc.save(fileName);
         alert('Bill generated successfully! File saved as: ' + fileName);
+        // Remove CSV/JSON download functionality
+        // this.appendCustomerProfile({
+        //     customerName,
+        //     customerMobile,
+        //     billNumber,
+        //     date: currentDate.toLocaleDateString(),
+        //     time: currentDate.toLocaleTimeString(),
+        //     itemsPurchased,
+        //     finalAmount: finalAmount.toFixed(2)
+        // });
+        // this.appendCustomerProfileJSON({
+        //     customerName,
+        //     customerMobile,
+        //     billNumber,
+        //     date: currentDate.toLocaleDateString(),
+        //     time: currentDate.toLocaleTimeString(),
+        //     itemsPurchased,
+        //     finalAmount: finalAmount.toFixed(2)
+        // });
         this.closeModal();
     }
 
@@ -734,7 +763,7 @@ class ShoppingCart {
         doc.line(10, 72, width-10, 72);
         // Table header
         const leftMargin = 12;
-        const colWidths = [32, 18, 18, 28, 28, 28, 28];
+        const colWidths = [32, 18, 18, 28, 28];
         let headerX = [];
         let x = leftMargin;
         for (let w of colWidths) {
@@ -746,10 +775,8 @@ class ShoppingCart {
         doc.text('Product', headerX[0], 80, { maxWidth: colWidths[0] - 2 });
         doc.text('Qty', headerX[1], 80, { maxWidth: colWidths[1] - 2 });
         doc.text('Unit', headerX[2], 80, { maxWidth: colWidths[2] - 2 });
-        doc.text('Rate/Kg', headerX[3], 80, { maxWidth: colWidths[3] - 2 });
+        doc.text('Rate', headerX[3], 80, { maxWidth: colWidths[3] - 2 });
         doc.text('Price', headerX[4], 80, { maxWidth: colWidths[4] - 2 });
-        doc.text('Disc', headerX[5], 80, { maxWidth: colWidths[5] - 2 });
-        doc.text('Final', headerX[6], 80, { maxWidth: colWidths[6] - 2 });
         doc.line(10, 84, width-10, 84);
         doc.setFont('times', 'normal');
         doc.setFontSize(7);
@@ -765,16 +792,12 @@ class ShoppingCart {
             } else if (itemUnit === 'Pc' || itemUnit === 'Carton') {
                 price = cartItem.price || 0;
             }
-            const discount = cartItem.discount || 0;
-            const finalPrice = price * (1 - discount / 100);
-            const productName = cartItem.productId ? this.products.find(p => p.serialNumber === cartItem.productId).name : '';
+            const productName = cartItem.productName || '';
             doc.text(productName, headerX[0], yPosition, { maxWidth: colWidths[0] - 2 });
             doc.text((cartItem.quantity ? cartItem.quantity.toString() : ''), headerX[1], yPosition, { maxWidth: colWidths[1] - 2 });
             doc.text(itemUnit, headerX[2], yPosition, { maxWidth: colWidths[2] - 2 });
             doc.text('Rs.' + rate.toFixed(2), headerX[3], yPosition, { maxWidth: colWidths[3] - 2 });
             doc.text('Rs.' + price.toFixed(2), headerX[4], yPosition, { maxWidth: colWidths[4] - 2 });
-            doc.text(discount.toString() + '%', headerX[5], yPosition, { maxWidth: colWidths[5] - 2 });
-            doc.text('Rs.' + finalPrice.toFixed(2), headerX[6], yPosition, { maxWidth: colWidths[6] - 2 });
             yPosition += 18;
         });
         doc.line(10, yPosition - 6, width-10, yPosition - 6);
@@ -812,6 +835,25 @@ class ShoppingCart {
         const fileName = billNumber + '.pdf';
         doc.save(fileName);
         alert('Mart Bill generated successfully! File saved as: ' + fileName);
+        // Remove CSV/JSON download functionality
+        // this.appendCustomerProfile({
+        //     customerName,
+        //     customerMobile,
+        //     billNumber,
+        //     date: currentDate.toLocaleDateString(),
+        //     time: currentDate.toLocaleTimeString(),
+        //     itemsPurchased,
+        //     finalAmount: finalAmount.toFixed(2)
+        // });
+        // this.appendCustomerProfileJSON({
+        //     customerName,
+        //     customerMobile,
+        //     billNumber,
+        //     date: currentDate.toLocaleDateString(),
+        //     time: currentDate.toLocaleTimeString(),
+        //     itemsPurchased,
+        //     finalAmount: finalAmount.toFixed(2)
+        // });
         this.closeModal();
     }
 
