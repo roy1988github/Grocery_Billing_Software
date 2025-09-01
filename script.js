@@ -457,6 +457,12 @@ class ShoppingCart {
         const summaryContainer = document.getElementById('checkout-summary');
         const modalTotal = document.getElementById('modal-total');
 
+        // Remove Total Amount display from modal
+        const modalTotalDiv = document.querySelector('.modal-total');
+        if (modalTotalDiv) {
+            modalTotalDiv.style.display = 'none';
+        }
+
         let total = 0;
         let summaryHTML = '';
 
@@ -465,16 +471,21 @@ class ShoppingCart {
             if (cartItem.unit === 'gm' || cartItem.unit === 'cc') {
                 rate = rate / 1000;
             }
-            const price = rate * (parseFloat(cartItem.quantity) || 0);
+            let price = 0;
+            if (cartItem.unit === 'Pc' || cartItem.unit === 'Carton') {
+                price = cartItem.price || 0;
+            } else {
+                price = rate * (parseFloat(cartItem.quantity) || 0);
+            }
             const discount = cartItem.discount || 0;
             const finalPrice = price * (1 - discount / 100);
             total += finalPrice;
             summaryHTML += `
                 <div class="checkout-item">
                     <div class="item-details">
-                        <div class="item-name">${cartItem.productId ? this.products.find(p => p.serialNumber === cartItem.productId).name : ''}</div>
+                        <div class="item-product">${cartItem.productName || ''}</div>
                         <div class="item-specs">
-                            ${cartItem.quantity} ${cartItem.unit} @ ₹${rate.toFixed(2)}/${cartItem.unit}
+                            ${cartItem.quantity} ${cartItem.unit} @ ₹${rate.toFixed(2)}/Kg
                             ${discount > 0 ? ` (${discount}% discount)` : ''}
                         </div>
                     </div>
@@ -482,6 +493,14 @@ class ShoppingCart {
                 </div>
             `;
         });
+        // Calculate Final Amount to be Paid
+        const finalDiscountInput = document.getElementById('final-discount-input');
+        const gstInput = document.getElementById('gst-input');
+        let finalDiscount = parseFloat(finalDiscountInput?.value) || 0;
+        let gst = parseFloat(gstInput?.value) || 0;
+        let discountedTotal = total * (100 - finalDiscount) / 100;
+        let finalAmount = discountedTotal * (100 + gst) / 100;
+        summaryHTML += `<div class='checkout-final-amount'><strong>Final Amount to be Paid: ₹${finalAmount.toFixed(2)}</strong></div>`;
 
         summaryContainer.innerHTML = summaryHTML;
         modalTotal.textContent = `₹${total.toFixed(2)}`;
@@ -602,12 +621,16 @@ class ShoppingCart {
         doc.text('Phone: +91 93303 53449 | Email: info@kalimatagrocery.com', 105, 56, { align: 'center' });
         doc.line(20, 61, 190, 61);
         const currentDate = new Date();
-        const billNumber = 'Kalimata_' + Date.now().toString().slice(-6);
-        // Bill No, Date, Time in one line
+        const pad = n => n.toString().padStart(2, '0');
+        const day = pad(currentDate.getDate());
+        const month = pad(currentDate.getMonth() + 1);
+        const hour = pad(currentDate.getHours());
+        const minute = pad(currentDate.getMinutes());
+        const billNumber = `Kalimata_${day}${month}${hour}${minute}`;
+        const billInfo = `Bill No: ${billNumber}    Date: ${currentDate.toLocaleDateString()}    Time: ${currentDate.toLocaleTimeString()}`;
         doc.setFont('times', 'normal');
-        doc.setFontSize(10);
-        doc.text(`Bill No: ${billNumber}    Date: ${currentDate.toLocaleDateString()}    Time: ${currentDate.toLocaleTimeString()}`,
-            20, 68);
+        doc.setFontSize(7);
+        doc.text(billInfo, 12, 66, { align: 'left' });
         doc.setFont('times', 'bold');
         const tableStartY = 80;
         // Adjusted X positions for better spacing
@@ -754,8 +777,12 @@ class ShoppingCart {
         doc.text('Phone: +91 93303 53449', width/2, 50, { align: 'center' });
         doc.line(10, 56, width-10, 56);
         // Bill number, date & time
-        const billNumber = 'Kalimata_' + Date.now().toString().slice(-6);
-        const currentDate = new Date();
+        const pad = n => n.toString().padStart(2, '0');
+        const day = pad(currentDate.getDate());
+        const month = pad(currentDate.getMonth() + 1);
+        const hour = pad(currentDate.getHours());
+        const minute = pad(currentDate.getMinutes());
+        const billNumber = `Kalimata_${day}${month}${hour}${minute}`;
         const billInfo = `Bill No: ${billNumber}    Date: ${currentDate.toLocaleDateString()}    Time: ${currentDate.toLocaleTimeString()}`;
         doc.setFont('times', 'normal');
         doc.setFontSize(7);
