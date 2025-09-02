@@ -767,6 +767,7 @@ class ShoppingCart {
         const width = 76.2 * 2.83465; // 3 inches in points
         const height = 105 * 2.83465;
         const doc = new jsPDF({ unit: 'pt', format: [width, height] });
+        const currentDate = new Date();
         doc.setFont('times', 'bold');
         doc.setFontSize(10);
         doc.text('KALI MATA ENTERPRISES', width/2, 20, { align: 'center' });
